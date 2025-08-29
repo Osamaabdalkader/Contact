@@ -15,28 +15,26 @@
         
         <div class="admin-panel">
             <div class="conversations-list">
-                <h2>المستخدمين النشطين</h2>
+                <h2>المحادثات النشطة</h2>
                 <div id="usersList" class="users-list">
-                    <!-- سيتم عرض قائمة المستخدمين هنا -->
+                    <!-- سيتم عرض قائمة المستخدمين النشطين هنا -->
                 </div>
             </div>
             
-            <div class="chat-section">
-                <div class="chat-tabs" id="chatTabs">
-                    <!-- سيتم إنشاء تبويبات المحادثات تلقائياً هنا -->
+            <div class="chat-container">
+                <div class="chat-header">
+                    <h2 id="currentUserName">اختر محادثة لعرض الرسائل</h2>
                 </div>
                 
-                <div class="chat-container">
-                    <div id="messagesContainer" class="messages-container">
-                        <div class="no-chat-selected">
-                            <p>المحادثات ستظهر تلقائياً هنا عند وصول رسائل جديدة</p>
-                        </div>
+                <div id="messagesContainer" class="messages-container">
+                    <div class="no-chat-selected">
+                        <p>المحادثات ستظهر تلقائياً هنا عند وصول رسائل جديدة</p>
                     </div>
-                    
-                    <div class="message-input">
-                        <textarea id="messageInput" placeholder="اكتب رسالتك هنا..." disabled></textarea>
-                        <button id="sendBtn" class="send-btn" disabled>إرسال</button>
-                    </div>
+                </div>
+                
+                <div class="message-input">
+                    <textarea id="messageInput" placeholder="اكتب رسالتك هنا..." disabled></textarea>
+                    <button id="sendBtn" class="send-btn" disabled>إرسال</button>
                 </div>
             </div>
         </div>
