@@ -167,6 +167,95 @@ button:hover {
     flex-direction: column;
 }
 
+
+/* أنماط التبويبات التلقائية */
+.chat-tabs {
+    display: flex;
+    background-color: var(--light-color);
+    border-bottom: 1px solid var(--border-color);
+    overflow-x: auto;
+    min-height: 50px;
+}
+
+.chat-tab {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    background-color: white;
+    border-right: 1px solid var(--border-color);
+    cursor: pointer;
+    min-width: 150px;
+    position: relative;
+    transition: all 0.3s;
+    border-top: 3px solid transparent;
+}
+
+.chat-tab.active {
+    background-color: var(--primary-color);
+    color: white;
+    border-top: 3px solid var(--secondary-color);
+}
+
+.chat-tab:hover:not(.active) {
+    background-color: #e9ecef;
+}
+
+.chat-tab.new-message {
+    animation: pulse 1s;
+}
+
+@keyframes pulse {
+    0% { background-color: white; }
+    50% { background-color: #fff3cd; }
+    100% { background-color: white; }
+}
+
+/* حالة المستخدمين */
+.user-status {
+    font-size: 0.8rem;
+    margin-top: 5px;
+}
+
+.user-status.online {
+    color: green;
+    font-weight: bold;
+}
+
+/* تحسين التمرير الأفقي للتبويبات */
+.chat-tabs::-webkit-scrollbar {
+    height: 6px;
+}
+
+.chat-tabs::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.chat-tabs::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 3px;
+}
+
+.chat-tabs::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* تحسين المظهر للهواتف */
+@media (max-width: 768px) {
+    .admin-panel {
+        flex-direction: column;
+    }
+    
+    .conversations-list {
+        max-height: 200px;
+    }
+    
+    .chat-tab {
+        min-width: 120px;
+    }
+}
+
+
+
 .admin-panel {
     display: flex;
     gap: 20px;
