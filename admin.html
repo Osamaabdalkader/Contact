@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة تحكم الإدارة</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>لوحة تحكم الإدارة</h1>
+            <button id="logoutBtn" class="logout-btn">تسجيل الخروج</button>
+        </div>
+        
+        <div class="admin-panel">
+            <div class="conversations-list">
+                <h2>المستخدمين</h2>
+                <input type="text" id="searchUsers" placeholder="بحث عن مستخدم...">
+                <div id="usersList" class="users-list">
+                    <!-- سيتم عرض قائمة المستخدمين هنا -->
+                </div>
+            </div>
+            
+            <div class="chat-section">
+                <div class="chat-tabs" id="chatTabs">
+                    <!-- سيتم إنشاء تبويبات المحادثات هنا -->
+                </div>
+                
+                <div class="chat-container">
+                    <div id="messagesContainer" class="messages-container">
+                        <div class="no-chat-selected">
+                            <p>اختر محادثة لبدء الدردشة</p>
+                        </div>
+                    </div>
+                    
+                    <div class="message-input">
+                        <textarea id="messageInput" placeholder="اكتب رسالتك هنا..." disabled></textarea>
+                        <button id="sendBtn" class="send-btn" disabled>إرسال</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.0.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.2/firebase-database-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="admin-panel.js"></script>
+</body>
+</html>

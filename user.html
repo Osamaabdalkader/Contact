@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>صفحة المستخدم</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>مرحبًا، <span id="userName"></span></h1>
+            <button id="logoutBtn" class="logout-btn">تسجيل الخروج</button>
+        </div>
+        
+        <div class="chat-container">
+            <div class="messages-header">
+                <h2>المحادثات مع الإدارة</h2>
+                <div class="unread-count" id="unreadCount">0</div>
+            </div>
+            
+            <div id="messagesContainer" class="messages-container">
+                <!-- سيتم عرض الرسائل هنا -->
+            </div>
+            
+            <div class="message-input">
+                <textarea id="messageInput" placeholder="اكتب رسالتك هنا..."></textarea>
+                <button id="sendBtn" class="send-btn">إرسال</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.0.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.2/firebase-database-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="user-messaging.js"></script>
+</body>
+</html>

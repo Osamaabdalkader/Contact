@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام الرسائل - تسجيل الدخول</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>نظام الرسائل</h1>
+            <p>تواصل مع الإدارة بسهولة وأمان</p>
+        </div>
+        
+        <div class="auth-container">
+            <div class="tabs">
+                <button id="loginTab" class="active">تسجيل الدخول</button>
+                <button id="signupTab">إنشاء حساب</button>
+            </div>
+            
+            <div id="loginForm" class="form-container">
+                <input type="email" id="loginEmail" placeholder="البريد الإلكتروني" required>
+                <input type="password" id="loginPassword" placeholder="كلمة المرور" required>
+                <button id="loginBtn">تسجيل الدخول</button>
+            </div>
+            
+            <div id="signupForm" class="form-container hidden">
+                <input type="text" id="signupName" placeholder="الاسم الكامل" required>
+                <input type="email" id="signupEmail" placeholder="البريد الإلكتروني" required>
+                <input type="password" id="signupPassword" placeholder="كلمة المرور" required>
+                <button id="signupBtn">إنشاء حساب</button>
+            </div>
+            
+            <div id="authMessage" class="message"></div>
+        </div>
+        
+        <div class="footer">
+            <p>© 2023 نظام الرسائل. جميع الحقوق محفوظة.</p>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.0.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.2/firebase-database-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="auth.js"></script>
+</body>
+</html>
