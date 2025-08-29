@@ -40,14 +40,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const messagesContainer = document.getElementById('messagesContainer');
         const messageInput = document.getElementById('messageInput');
         const sendBtn = document.getElementById('sendBtn');
-        const chatTabs = document.getElementById('chatTabs');
         const usersList = document.getElementById('usersList');
+        const currentUserName = document.getElementById('currentUserName');
 
-        // متغيرات لإدارة التبويبات والمحادثات
-        let activeTab = null;
-        const openTabs = {};
+        // متغيرات لإدارة المحادثات
+        let activeUserId = null;
         const userLastMessageTime = {};
         const userUnreadCounts = {};
+        const userMessages = {};
+        const userDataMap = {};
 
         // تسجيل الخروج
         logoutBtn.addEventListener('click', () => {
@@ -55,9 +56,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 window.location.href = 'index.html';
             });
         });
-
-        // بدء مراقبة الرسائل
-        monitorMessages();
 
         // إرسال الرسائل
         sendBtn.addEventListener('click', sendMessage);
@@ -68,7 +66,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // مراقبة جميع الرسائل وإنشاء التبويبات تلقائياً
+        // بدء مراقبة الرسائل
+        monitorMessages();
+
+        // مراقبة جميع الرسائل وتحديث قائمة المستخدمين
         function monitorMessages() {
             database.ref('messages').orderByChild('timestamp').on('child_added', snapshot => {
                 const message = snapshot.val();
@@ -85,20 +86,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 // تحديث وقت آخر رسالة لهذا المستخدم
                 userLastMessageTime[otherUserId] = message.timestamp;
                 
-                // إذا لم يكن التبويب مفتوحاً، إنشاء تبويب جديد
-                if (!openTabs[otherUserId]) {
-                    // جلب بيانات المستخدم أولاً
+                // جلب بيانات المستخدم إذا لم تكن محملة
+                if (!userDataMap[otherUserId]) {
                     database.ref('users/' + otherUserId).once('value').then(userSnapshot => {
                         const userData = userSnapshot.val();
                         if (userData) {
-                            createChatTab(otherUserId, userData.name);
-                            loadUserMessages(otherUserId);
+                            userDataMap[otherUserId] = userData;
+                            
+                            // إذا لم يكن المستخدم مضافاً في القائمة، نضيفه
+                            if (!userMessages[otherUserId]) {
+                                userMessages[otherUserId] = [];
+                                addUserToList(otherUserId, userData.name);
+                            }
                         }
                     });
-                } else {
-                    // إضافة الرسالة إلى التبويب المفتوح
-                    addMessageToTab(otherUserId, message, messageId);
                 }
+                
+                // تخزين الرسالة
+                if (!userMessages[otherUserId]) {
+                    userMessages[otherUserId] = [];
+                }
+                
+                userMessages[otherUserId].push({
+                    id: messageId,
+                    ...message
+                });
                 
                 // زيادة العداد إذا كانت الرسالة موجهة للإدارة ولم تقرأ
                 if (message.receiverId === adminUser.uid && !message.isRead) {
@@ -106,153 +118,82 @@ document.addEventListener('DOMContentLoaded', () => {
                     database.ref('messages/' + messageId).update({ isRead: true });
                 }
                 
-                // ترتيب التبويبات حسب آخر رسالة
-                sortTabsByLastMessage();
+                // إذا كان المستخدم النشط هو المرسل إليه، نعرض الرسائل
+                if (activeUserId === otherUserId) {
+                    displayMessages(otherUserId);
+                }
                 
-                // تحديث قائمة المستخدمين
-                updateUsersList();
+                // ترتيب قائمة المستخدمين حسب آخر رسالة
+                sortUsersByLastMessage();
             });
         }
 
-        // إنشاء تبويب محادثة جديد
-        function createChatTab(userId, userName) {
-            const tab = document.createElement('div');
-            tab.className = 'chat-tab';
-            tab.dataset.userId = userId;
-            tab.innerHTML = `
-                <span class="tab-name">${userName}</span>
-                <span class="tab-unread" id="tab-unread-${userId}">0</span>
-                <button class="close-tab">×</button>
+        // إضافة مستخدم إلى قائمة المستخدمين النشطين
+        function addUserToList(userId, userName) {
+            // التحقق إذا كان المستخدم مضافاً بالفعل
+            if (document.querySelector(`.user-item[data-user-id="${userId}"]`)) {
+                return;
+            }
+            
+            const userElement = document.createElement('div');
+            userElement.className = 'user-item';
+            userElement.dataset.userId = userId;
+            
+            userElement.innerHTML = `
+                <div class="user-info">
+                    <div class="user-name">${userName}</div>
+                    <div class="last-message-time" id="time-${userId}"></div>
+                </div>
+                <div class="unread-count" id="unread-${userId}">0</div>
             `;
             
-            // حدث إغلاق التبويب
-            tab.querySelector('.close-tab').addEventListener('click', (e) => {
-                e.stopPropagation();
-                closeTab(userId);
+            // حدث النقر على المستخدم
+            userElement.addEventListener('click', () => {
+                switchToUser(userId, userName);
             });
             
-            // حدث اختيار التبويب
-            tab.addEventListener('click', () => {
-                switchToTab(userId);
-            });
-            
-            chatTabs.appendChild(tab);
-            
-            // حفظ التبويب
-            openTabs[userId] = {
-                element: tab,
-                name: userName,
-                messages: [],
-                userId: userId
-            };
+            usersList.appendChild(userElement);
             
             // تهيئة العداد
             userUnreadCounts[userId] = 0;
-        }
-
-        // تحميل الرسائل السابقة للمستخدم
-        function loadUserMessages(userId) {
-            if (!openTabs[userId]) return;
             
-            database.ref('messages')
-                .orderByChild('timestamp')
-                .once('value')
-                .then(snapshot => {
-                    const messages = [];
-                    snapshot.forEach(child => {
-                        const message = child.val();
-                        if ((message.senderId === adminUser.uid && message.receiverId === userId) || 
-                            (message.senderId === userId && message.receiverId === adminUser.uid)) {
-                            messages.push({
-                                id: child.key,
-                                ...message
-                            });
-                        }
-                    });
-                    
-                    // حفظ الرسائل وترتيبها حسب الوقت
-                    openTabs[userId].messages = messages.sort((a, b) => a.timestamp - b.timestamp);
-                    
-                    // إذا كان التبويب نشطاً، عرض الرسائل
-                    if (activeTab === userId) {
-                        displayMessages(userId);
-                    }
-                });
+            // تحديث وقت آخر رسالة
+            updateLastMessageTime(userId);
         }
 
-        // إضافة رسالة إلى تبويب محدد
-        function addMessageToTab(userId, message, messageId) {
-            if (!openTabs[userId]) return;
-            
-            // تجنب تكرار الرسائل
-            if (!openTabs[userId].messages.some(m => m.id === messageId)) {
-                openTabs[userId].messages.push({
-                    id: messageId,
-                    ...message
-                });
-                
-                // إذا كان التبويب نشطاً، عرض الرسائل
-                if (activeTab === userId) {
-                    displayMessages(userId);
-                }
-            }
-        }
-
-        // التبديل إلى تبويب محدد
-        function switchToTab(userId) {
-            // إلغاء تنشيط جميع التبويبات
-            document.querySelectorAll('.chat-tab').forEach(tab => {
-                tab.classList.remove('active');
+        // التبديل إلى محادثة مستخدم معين
+        function switchToUser(userId, userName) {
+            // إلغاء تنشيط جميع المستخدمين
+            document.querySelectorAll('.user-item').forEach(item => {
+                item.classList.remove('active');
             });
             
-            // تنشيط التبويب المحدد
-            if (openTabs[userId]) {
-                openTabs[userId].element.classList.add('active');
-                activeTab = userId;
-                
-                // عرض رسائل هذا التبويب
-                displayMessages(userId);
-                
-                // تفعيل مربع الكتابة
-                messageInput.disabled = false;
-                sendBtn.disabled = false;
-                
-                // إعادة تعيين العداد غير المقروء
-                resetUnreadCount(userId);
+            // تنشيط المستخدم المحدد
+            const userElement = document.querySelector(`.user-item[data-user-id="${userId}"]`);
+            if (userElement) {
+                userElement.classList.add('active');
             }
+            
+            activeUserId = userId;
+            currentUserName.textContent = userName;
+            
+            // عرض رسائل هذا المستخدم
+            displayMessages(userId);
+            
+            // تفعيل مربع الكتابة
+            messageInput.disabled = false;
+            sendBtn.disabled = false;
+            
+            // إعادة تعيين العداد غير المقروء
+            resetUnreadCount(userId);
         }
 
-        // إغلاق تبويب
-        function closeTab(userId) {
-            if (openTabs[userId]) {
-                // إزالة التبويب
-                openTabs[userId].element.remove();
-                delete openTabs[userId];
-                delete userUnreadCounts[userId];
-                
-                // إذا كان التبويب المغلق هو النشط
-                if (activeTab === userId) {
-                    const remainingTabs = Object.keys(openTabs);
-                    if (remainingTabs.length > 0) {
-                        // الانتقال إلى أول تبويب متبقي
-                        switchToTab(remainingTabs[0]);
-                    } else {
-                        // لا توجد تبويبات مفتوحة
-                        activeTab = null;
-                        messagesContainer.innerHTML = '<div class="no-chat-selected"><p>اختر محادثة لبدء الدردشة</p></div>';
-                        messageInput.disabled = true;
-                        sendBtn.disabled = true;
-                    }
-                }
-            }
-        }
-
-        // عرض الرسائل في التبويب النشط
+        // عرض الرسائل للمستخدم النشط
         function displayMessages(userId) {
-            if (!openTabs[userId] || activeTab !== userId) return;
+            if (!userMessages[userId] || activeUserId !== userId) return;
             
             messagesContainer.innerHTML = '';
-            const messages = openTabs[userId].messages;
+            const messages = userMessages[userId].sort((a, b) => a.timestamp - b.timestamp);
             
             messages.forEach(message => {
                 const messageDiv = document.createElement('div');
@@ -268,96 +209,75 @@ document.addEventListener('DOMContentLoaded', () => {
                 messagesContainer.appendChild(messageDiv);
             });
             
+            // التمرير إلى أحدث رسالة
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
 
         // زيادة عداد الرسائل غير المقروءة
         function incrementUnreadCount(userId) {
-            if (openTabs[userId]) {
-                userUnreadCounts[userId] = (userUnreadCounts[userId] || 0) + 1;
-                const unreadElement = openTabs[userId].element.querySelector('.tab-unread');
+            userUnreadCounts[userId] = (userUnreadCounts[userId] || 0) + 1;
+            const unreadElement = document.getElementById(`unread-${userId}`);
+            if (unreadElement) {
                 unreadElement.textContent = userUnreadCounts[userId];
-                unreadElement.style.display = 'inline-block';
+                unreadElement.style.display = 'block';
                 
-                // تأثير تنبيه للتبويب الجديد
-                openTabs[userId].element.classList.add('new-message');
-                setTimeout(() => {
-                    openTabs[userId].element.classList.remove('new-message');
-                }, 1000);
+                // تأثير تنبيه للمستخدم
+                const userElement = document.querySelector(`.user-item[data-user-id="${userId}"]`);
+                if (userElement) {
+                    userElement.classList.add('new-message');
+                    setTimeout(() => {
+                        userElement.classList.remove('new-message');
+                    }, 1000);
+                }
             }
         }
 
         // إعادة تعيين عداد الرسائل غير المقروءة
         function resetUnreadCount(userId) {
-            if (openTabs[userId]) {
-                userUnreadCounts[userId] = 0;
-                const unreadElement = openTabs[userId].element.querySelector('.tab-unread');
+            userUnreadCounts[userId] = 0;
+            const unreadElement = document.getElementById(`unread-${userId}`);
+            if (unreadElement) {
                 unreadElement.textContent = '0';
                 unreadElement.style.display = 'none';
             }
         }
 
-        // ترتيب التبويبات حسب آخر رسالة
-        function sortTabsByLastMessage() {
-            const sortedUserIds = Object.keys(userLastMessageTime).sort((a, b) => {
-                return userLastMessageTime[b] - userLastMessageTime[a];
+        // ترتيب المستخدمين حسب آخر رسالة
+        function sortUsersByLastMessage() {
+            const userItems = Array.from(document.querySelectorAll('.user-item'));
+            
+            userItems.sort((a, b) => {
+                const userIdA = a.dataset.userId;
+                const userIdB = b.dataset.userId;
+                const timeA = userLastMessageTime[userIdA] || 0;
+                const timeB = userLastMessageTime[userIdB] || 0;
+                return timeB - timeA;
             });
             
-            // إعادة ترتيب التبويبات حسب الترتيب الجديد
-            sortedUserIds.forEach(userId => {
-                if (openTabs[userId]) {
-                    chatTabs.appendChild(openTabs[userId].element);
-                }
+            // إعادة إضافة العناصر بالترتيب الجديد
+            userItems.forEach(item => {
+                usersList.appendChild(item);
             });
         }
 
-        // تحديث قائمة المستخدمين
-        function updateUsersList() {
-            database.ref('users').once('value').then(snapshot => {
-                usersList.innerHTML = '';
-                snapshot.forEach(child => {
-                    const userData = child.val();
-                    if (userData.role === 'user') {
-                        const userElement = document.createElement('div');
-                        userElement.className = 'user-item';
-                        userElement.dataset.userId = child.key;
-                        
-                        userElement.innerHTML = `
-                            <div class="user-name">${userData.name}</div>
-                            <div class="user-email">${userData.email}</div>
-                            <div class="user-status" id="status-${child.key}">غير نشط</div>
-                        `;
-                        
-                        // تحديث حالة المستخدم بناءً على وجود محادثة
-                        if (openTabs[child.key]) {
-                            userElement.querySelector('.user-status').textContent = 'نشط الآن';
-                            userElement.querySelector('.user-status').classList.add('online');
-                        }
-                        
-                        userElement.addEventListener('click', () => {
-                            if (!openTabs[child.key]) {
-                                createChatTab(child.key, userData.name);
-                                loadUserMessages(child.key);
-                            }
-                            switchToTab(child.key);
-                        });
-                        
-                        usersList.appendChild(userElement);
-                    }
-                });
-            });
+        // تحديث وقت آخر رسالة للمستخدم
+        function updateLastMessageTime(userId) {
+            const timeElement = document.getElementById(`time-${userId}`);
+            if (timeElement && userLastMessageTime[userId]) {
+                timeElement.textContent = formatTime(userLastMessageTime[userId]);
+            }
         }
 
         // إرسال رسالة
         function sendMessage() {
-            if (!activeTab) return;
+            if (!activeUserId) return;
             
             const message = messageInput.value.trim();
             if (!message) return;
             
             const newMessage = {
                 senderId: adminUser.uid,
-                receiverId: activeTab,
+                receiverId: activeUserId,
                 content: message,
                 timestamp: Date.now(),
                 isRead: false,
@@ -370,16 +290,32 @@ document.addEventListener('DOMContentLoaded', () => {
                     messageInput.value = '';
                     
                     // تحديث وقت آخر رسالة لهذا المستخدم
-                    userLastMessageTime[activeTab] = Date.now();
+                    userLastMessageTime[activeUserId] = Date.now();
+                    updateLastMessageTime(activeUserId);
                     
-                    // إعادة ترتيب التبويبات
-                    sortTabsByLastMessage();
+                    // إعادة ترتيب المستخدمين
+                    sortUsersByLastMessage();
                 });
         }
 
         function formatTime(timestamp) {
             const date = new Date(timestamp);
-            return `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
+            const now = new Date();
+            const diff = now - date;
+            
+            // إذا كانت الرسالة من اليوم
+            if (diff < 24 * 60 * 60 * 1000) {
+                return `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
+            } 
+            // إذا كانت الرسالة من الأسبوع الحالي
+            else if (diff < 7 * 24 * 60 * 60 * 1000) {
+                const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+                return days[date.getDay()];
+            }
+            // إذا كانت الرسالة أقدم من أسبوع
+            else {
+                return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
+            }
         }
 
         // تحميل المحادثات الحالية عند البدء
@@ -397,22 +333,26 @@ document.addEventListener('DOMContentLoaded', () => {
                             const otherUserId = message.senderId === adminUser.uid ? 
                                 message.receiverId : message.senderId;
                             usersWithMessages.add(otherUserId);
+                            userLastMessageTime[otherUserId] = message.timestamp;
                         }
                     });
                     
-                    // إنشاء تبويبات للمستخدمين النشطين
-                    usersWithMessages.forEach(userId => {
-                        database.ref('users/' + userId).once('value').then(userSnapshot => {
+                    // جلب بيانات المستخدمين النشطين
+                    const userPromises = Array.from(usersWithMessages).map(userId => {
+                        return database.ref('users/' + userId).once('value').then(userSnapshot => {
                             const userData = userSnapshot.val();
                             if (userData) {
-                                createChatTab(userId, userData.name);
-                                loadUserMessages(userId);
+                                userDataMap[userId] = userData;
+                                userMessages[userId] = [];
+                                addUserToList(userId, userData.name);
                             }
                         });
                     });
                     
-                    // تحديث قائمة المستخدمين
-                    updateUsersList();
+                    // بعد تحميل جميع بيانات المستخدمين، نرتب القائمة
+                    Promise.all(userPromises).then(() => {
+                        sortUsersByLastMessage();
+                    });
                 });
         }
     }
