@@ -247,6 +247,83 @@ button:hover {
     color: var(--gray-color);
 }
 
+
+
+/* أنماط العداد الأحمر للرسائل غير المقروءة */
+.unread-badge {
+    display: none;
+    background-color: #e53935;
+    color: white;
+    border-radius: 50%;
+    min-width: 20px;
+    height: 20px;
+    text-align: center;
+    line-height: 20px;
+    font-size: 12px;
+    font-weight: bold;
+    justify-content: center;
+    align-items: center;
+    padding: 0 5px;
+}
+
+.user-item.active .unread-badge {
+    background-color: white;
+    color: #e53935;
+}
+
+/* تحسين مظهر قائمة المستخدمين */
+.user-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: all 0.3s;
+    border-radius: 8px;
+    margin-bottom: 5px;
+}
+
+.user-item:hover {
+    background-color: var(--light-color);
+}
+
+.user-item.active {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.user-item.active .last-message-time {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.user-info {
+    flex: 1;
+}
+
+.user-name {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.last-message-time {
+    font-size: 0.8rem;
+    color: var(--gray-color);
+}
+
+/* تأثير التنبيه عند وصول رسالة جديدة */
+.user-item.new-message {
+    animation: pulse 1s;
+}
+
+@keyframes pulse {
+    0% { background-color: inherit; }
+    50% { background-color: #fff3cd; }
+    100% { background-color: inherit; }
+}
+
+
+
 .unread-count {
     display: none;
     background-color: var(--error-color);
