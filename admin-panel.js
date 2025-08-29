@@ -1,4 +1,6 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', function() {
+    console.log("Admin panel loaded");
+    
     // تهيئة Firebase
     const firebaseConfig = {
         apiKey: "AIzaSyAzYZMxqNmnLMGYnCyiJYPg2MbxZMt0co0",
@@ -16,13 +18,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const database = firebase.database();
 
     // التحقق من حالة المستخدم
-    auth.onAuthStateChanged(user => {
+    auth.onAuthStateChanged(function(user) {
         if (!user) {
             window.location.href = 'index.html';
         } else {
             // التحقق من أن المستخدم مدير
             database.ref('users/' + user.uid).once('value')
-                .then(snapshot => {
+                .then(function(snapshot) {
                     const userData = snapshot.val();
                     if (userData && userData.role === 'admin') {
                         initAdminPage(user);
@@ -35,6 +37,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function initAdminPage(adminUser) {
+        console.log("Initializing admin page for user:", adminUser.uid);
+        
         // عناصر واجهة المستخدم
         const logoutBtn = document.getElementById('logoutBtn');
         const messagesContainer = document.getElementById('messagesContainer');
@@ -51,15 +55,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const userDataMap = {};
 
         // تسجيل الخروج
-        logoutBtn.addEventListener('click', () => {
-            auth.signOut().then(() => {
+        logoutBtn.addEventListener('click', function() {
+            auth.signOut().then(function() {
                 window.location.href = 'index.html';
             });
         });
 
         // إرسال الرسائل
         sendBtn.addEventListener('click', sendMessage);
-        messageInput.addEventListener('keypress', (e) => {
+        messageInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage();
@@ -71,9 +75,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // مراقبة جميع الرسائل وتحديث قائمة المستخدمين
         function monitorMessages() {
-            database.ref('messages').orderByChild('timestamp').on('child_added', snapshot => {
+            console.log("Starting to monitor messages");
+            
+            database.ref('messages').orderByChild('timestamp').on('child_added', function(snapshot) {
                 const message = snapshot.val();
                 const messageId = snapshot.key;
+                
+                console.log("New message received:", message);
                 
                 // تجاهل الرسائل التي ليس لها علاقة بالإدارة
                 if (message.receiverId !== adminUser.uid && message.senderId !== adminUser.uid) {
@@ -83,12 +91,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 // تحديد المستخدم المتحدث مع الإدارة
                 const otherUserId = message.senderId === adminUser.uid ? message.receiverId : message.senderId;
                 
+                console.log("Other user ID:", otherUserId);
+                
                 // تحديث وقت آخر رسالة لهذا المستخدم
                 userLastMessageTime[otherUserId] = message.timestamp;
                 
                 // جلب بيانات المستخدم إذا لم تكن محملة
                 if (!userDataMap[otherUserId]) {
-                    database.ref('users/' + otherUserId).once('value').then(userSnapshot => {
+                    database.ref('users/' + otherUserId).once('value').then(function(userSnapshot) {
                         const userData = userSnapshot.val();
                         if (userData) {
                             userDataMap[otherUserId] = userData;
@@ -131,18 +141,20 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             // تجنب تكرار الرسائل
-            if (!userMessages[userId].some(m => m.id === messageId)) {
+            const messageExists = userMessages[userId].some(m => m.id === messageId);
+            if (!messageExists) {
                 userMessages[userId].push({
                     id: messageId,
                     ...message
                 });
+                console.log("Message added to user:", userId, userMessages[userId].length);
             }
         }
 
         // إضافة مستخدم إلى قائمة المستخدمين النشطين
         function addUserToList(userId, userName) {
             // التحقق إذا كان المستخدم مضافاً بالفعل
-            if (document.querySelector(`.user-item[data-user-id="${userId}"]`)) {
+            if (document.querySelector('.user-item[data-user-id="' + userId + '"]')) {
                 return;
             }
             
@@ -159,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             
             // حدث النقر على المستخدم
-            userElement.addEventListener('click', () => {
+            userElement.addEventListener('click', function() {
                 switchToUser(userId, userName);
             });
             
@@ -170,17 +182,21 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // تحديث وقت آخر رسالة
             updateLastMessageTime(userId);
+            
+            console.log("User added to list:", userId, userName);
         }
 
         // التبديل إلى محادثة مستخدم معين
         function switchToUser(userId, userName) {
+            console.log("Switching to user:", userId);
+            
             // إلغاء تنشيط جميع المستخدمين
-            document.querySelectorAll('.user-item').forEach(item => {
+            document.querySelectorAll('.user-item').forEach(function(item) {
                 item.classList.remove('active');
             });
             
             // تنشيط المستخدم المحدد
-            const userElement = document.querySelector(`.user-item[data-user-id="${userId}"]`);
+            const userElement = document.querySelector('.user-item[data-user-id="' + userId + '"]');
             if (userElement) {
                 userElement.classList.add('active');
             }
@@ -201,12 +217,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // عرض الرسائل للمستخدم النشط
         function displayMessages(userId) {
-            if (!userMessages[userId] || activeUserId !== userId) return;
+            if (!userMessages[userId] || activeUserId !== userId) {
+                console.log("Cannot display messages for user:", userId);
+                return;
+            }
+            
+            console.log("Displaying messages for user:", userId, userMessages[userId].length);
             
             messagesContainer.innerHTML = '';
-            const messages = userMessages[userId].sort((a, b) => a.timestamp - b.timestamp);
+            const messages = userMessages[userId].sort(function(a, b) {
+                return a.timestamp - b.timestamp;
+            });
             
-            messages.forEach(message => {
+            messages.forEach(function(message) {
                 const messageDiv = document.createElement('div');
                 messageDiv.className = message.senderId === adminUser.uid ? 
                     'message sent' : 'message received';
@@ -227,16 +250,19 @@ document.addEventListener('DOMContentLoaded', () => {
         // زيادة عداد الرسائل غير المقروءة
         function incrementUnreadCount(userId) {
             userUnreadCounts[userId] = (userUnreadCounts[userId] || 0) + 1;
-            const unreadElement = document.getElementById(`unread-${userId}`);
+            const unreadElement = document.getElementById('unread-' + userId);
+            
+            console.log("Incrementing unread count for user:", userId, userUnreadCounts[userId]);
+            
             if (unreadElement) {
                 unreadElement.textContent = userUnreadCounts[userId];
                 unreadElement.style.display = 'flex';
                 
                 // تأثير تنبيه للمستخدم
-                const userElement = document.querySelector(`.user-item[data-user-id="${userId}"]`);
+                const userElement = document.querySelector('.user-item[data-user-id="' + userId + '"]');
                 if (userElement) {
                     userElement.classList.add('new-message');
-                    setTimeout(() => {
+                    setTimeout(function() {
                         userElement.classList.remove('new-message');
                     }, 1000);
                 }
@@ -246,7 +272,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // إعادة تعيين عداد الرسائل غير المقروءة
         function resetUnreadCount(userId) {
             userUnreadCounts[userId] = 0;
-            const unreadElement = document.getElementById(`unread-${userId}`);
+            const unreadElement = document.getElementById('unread-' + userId);
+            
+            console.log("Resetting unread count for user:", userId);
+            
             if (unreadElement) {
                 unreadElement.textContent = '0';
                 unreadElement.style.display = 'none';
@@ -257,7 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
         function sortUsersByLastMessage() {
             const userItems = Array.from(document.querySelectorAll('.user-item'));
             
-            userItems.sort((a, b) => {
+            userItems.sort(function(a, b) {
                 const userIdA = a.dataset.userId;
                 const userIdB = b.dataset.userId;
                 const timeA = userLastMessageTime[userIdA] || 0;
@@ -266,14 +295,14 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             
             // إعادة إضافة العناصر بالترتيب الجديد
-            userItems.forEach(item => {
+            userItems.forEach(function(item) {
                 usersList.appendChild(item);
             });
         }
 
         // تحديث وقت آخر رسالة للمستخدم
         function updateLastMessageTime(userId) {
-            const timeElement = document.getElementById(`time-${userId}`);
+            const timeElement = document.getElementById('time-' + userId);
             if (timeElement && userLastMessageTime[userId]) {
                 timeElement.textContent = formatTime(userLastMessageTime[userId]);
             }
@@ -297,7 +326,7 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             
             database.ref('messages').push().set(newMessage)
-                .then(() => {
+                .then(function() {
                     messageInput.value = '';
                     
                     // تحديث وقت آخر رسالة لهذا المستخدم
@@ -333,12 +362,14 @@ document.addEventListener('DOMContentLoaded', () => {
         loadExistingConversations();
         
         function loadExistingConversations() {
+            console.log("Loading existing conversations");
+            
             // جلب جميع الرسائل لمعرفة المستخدمين النشطين
             database.ref('messages').orderByChild('timestamp').once('value')
-                .then(snapshot => {
+                .then(function(snapshot) {
                     const usersWithMessages = new Set();
                     
-                    snapshot.forEach(child => {
+                    snapshot.forEach(function(child) {
                         const message = child.val();
                         if (message.receiverId === adminUser.uid || message.senderId === adminUser.uid) {
                             const otherUserId = message.senderId === adminUser.uid ? 
@@ -348,9 +379,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     });
                     
+                    console.log("Users with messages:", Array.from(usersWithMessages));
+                    
                     // جلب بيانات المستخدمين النشطين
-                    const userPromises = Array.from(usersWithMessages).map(userId => {
-                        return database.ref('users/' + userId).once('value').then(userSnapshot => {
+                    const userPromises = Array.from(usersWithMessages).map(function(userId) {
+                        return database.ref('users/' + userId).once('value').then(function(userSnapshot) {
                             const userData = userSnapshot.val();
                             if (userData) {
                                 userDataMap[userId] = userData;
@@ -361,7 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                     
                     // بعد تحميل جميع بيانات المستخدمين، نرتب القائمة
-                    Promise.all(userPromises).then(() => {
+                    Promise.all(userPromises).then(function() {
                         sortUsersByLastMessage();
                     });
                 });
