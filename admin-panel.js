@@ -98,19 +98,15 @@ document.addEventListener('DOMContentLoaded', () => {
                                 userMessages[otherUserId] = [];
                                 addUserToList(otherUserId, userData.name);
                             }
+                            
+                            // إضافة الرسالة إلى المستخدم
+                            addMessageToUser(otherUserId, message, messageId);
                         }
                     });
+                } else {
+                    // إضافة الرسالة إلى المستخدم
+                    addMessageToUser(otherUserId, message, messageId);
                 }
-                
-                // تخزين الرسالة
-                if (!userMessages[otherUserId]) {
-                    userMessages[otherUserId] = [];
-                }
-                
-                userMessages[otherUserId].push({
-                    id: messageId,
-                    ...message
-                });
                 
                 // زيادة العداد إذا كانت الرسالة موجهة للإدارة ولم تقرأ
                 if (message.receiverId === adminUser.uid && !message.isRead) {
@@ -126,6 +122,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 // ترتيب قائمة المستخدمين حسب آخر رسالة
                 sortUsersByLastMessage();
             });
+        }
+
+        // إضافة رسالة إلى مستخدم معين
+        function addMessageToUser(userId, message, messageId) {
+            if (!userMessages[userId]) {
+                userMessages[userId] = [];
+            }
+            
+            // تجنب تكرار الرسائل
+            if (!userMessages[userId].some(m => m.id === messageId)) {
+                userMessages[userId].push({
+                    id: messageId,
+                    ...message
+                });
+            }
         }
 
         // إضافة مستخدم إلى قائمة المستخدمين النشطين
@@ -144,7 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="user-name">${userName}</div>
                     <div class="last-message-time" id="time-${userId}"></div>
                 </div>
-                <div class="unread-count" id="unread-${userId}">0</div>
+                <div class="unread-badge" id="unread-${userId}">0</div>
             `;
             
             // حدث النقر على المستخدم
@@ -219,7 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const unreadElement = document.getElementById(`unread-${userId}`);
             if (unreadElement) {
                 unreadElement.textContent = userUnreadCounts[userId];
-                unreadElement.style.display = 'block';
+                unreadElement.style.display = 'flex';
                 
                 // تأثير تنبيه للمستخدم
                 const userElement = document.querySelector(`.user-item[data-user-id="${userId}"]`);
