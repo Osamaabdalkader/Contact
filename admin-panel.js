@@ -37,17 +37,17 @@ document.addEventListener('DOMContentLoaded', () => {
     function initAdminPage(adminUser) {
         // عناصر واجهة المستخدم
         const logoutBtn = document.getElementById('logoutBtn');
-        const usersList = document.getElementById('usersList');
-        const searchUsers = document.getElementById('searchUsers');
         const messagesContainer = document.getElementById('messagesContainer');
         const messageInput = document.getElementById('messageInput');
         const sendBtn = document.getElementById('sendBtn');
         const chatTabs = document.getElementById('chatTabs');
+        const usersList = document.getElementById('usersList');
 
-        // متغيرات لإدارة التبويبات
+        // متغيرات لإدارة التبويبات والمحادثات
         let activeTab = null;
         const openTabs = {};
-        let replyingTo = null;
+        const userLastMessageTime = {};
+        const userUnreadCounts = {};
 
         // تسجيل الخروج
         logoutBtn.addEventListener('click', () => {
@@ -56,44 +56,66 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
-        // تحميل المستخدمين
-        database.ref('users').on('value', snapshot => {
-            usersList.innerHTML = '';
-            snapshot.forEach(child => {
-                const userData = child.val();
-                if (userData.role === 'user') {
-                    const userElement = createUserElement(child.key, userData);
-                    usersList.appendChild(userElement);
-                }
-            });
+        // بدء مراقبة الرسائل
+        monitorMessages();
+
+        // إرسال الرسائل
+        sendBtn.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
         });
 
-        function createUserElement(userId, userData) {
-            const userElement = document.createElement('div');
-            userElement.className = 'user-item';
-            userElement.dataset.userId = userId;
-            
-            userElement.innerHTML = `
-                <div class="user-name">${userData.name}</div>
-                <div class="user-email">${userData.email}</div>
-                <div class="unread-count-tab" id="unread-${userId}">0</div>
-            `;
-            
-            userElement.addEventListener('click', () => {
-                openChatTab(userId, userData.name);
+        // مراقبة جميع الرسائل وإنشاء التبويبات تلقائياً
+        function monitorMessages() {
+            database.ref('messages').orderByChild('timestamp').on('child_added', snapshot => {
+                const message = snapshot.val();
+                const messageId = snapshot.key;
+                
+                // تجاهل الرسائل التي ليس لها علاقة بالإدارة
+                if (message.receiverId !== adminUser.uid && message.senderId !== adminUser.uid) {
+                    return;
+                }
+                
+                // تحديد المستخدم المتحدث مع الإدارة
+                const otherUserId = message.senderId === adminUser.uid ? message.receiverId : message.senderId;
+                
+                // تحديث وقت آخر رسالة لهذا المستخدم
+                userLastMessageTime[otherUserId] = message.timestamp;
+                
+                // إذا لم يكن التبويب مفتوحاً، إنشاء تبويب جديد
+                if (!openTabs[otherUserId]) {
+                    // جلب بيانات المستخدم أولاً
+                    database.ref('users/' + otherUserId).once('value').then(userSnapshot => {
+                        const userData = userSnapshot.val();
+                        if (userData) {
+                            createChatTab(otherUserId, userData.name);
+                            loadUserMessages(otherUserId);
+                        }
+                    });
+                } else {
+                    // إضافة الرسالة إلى التبويب المفتوح
+                    addMessageToTab(otherUserId, message, messageId);
+                }
+                
+                // زيادة العداد إذا كانت الرسالة موجهة للإدارة ولم تقرأ
+                if (message.receiverId === adminUser.uid && !message.isRead) {
+                    incrementUnreadCount(otherUserId);
+                    database.ref('messages/' + messageId).update({ isRead: true });
+                }
+                
+                // ترتيب التبويبات حسب آخر رسالة
+                sortTabsByLastMessage();
+                
+                // تحديث قائمة المستخدمين
+                updateUsersList();
             });
-            
-            return userElement;
         }
 
-        function openChatTab(userId, userName) {
-            // إذا كانت المحادثة مفتوحة بالفعل، انتقل إليها
-            if (openTabs[userId]) {
-                switchToTab(userId);
-                return;
-            }
-            
-            // إنشاء تبويب جديد
+        // إنشاء تبويب محادثة جديد
+        function createChatTab(userId, userName) {
             const tab = document.createElement('div');
             tab.className = 'chat-tab';
             tab.dataset.userId = userId;
@@ -120,16 +142,63 @@ document.addEventListener('DOMContentLoaded', () => {
             openTabs[userId] = {
                 element: tab,
                 name: userName,
-                messages: []
+                messages: [],
+                userId: userId
             };
             
-            // التبديل إلى التبويب الجديد
-            switchToTab(userId);
-            
-            // تحميل الرسائل
-            loadMessages(userId);
+            // تهيئة العداد
+            userUnreadCounts[userId] = 0;
         }
 
+        // تحميل الرسائل السابقة للمستخدم
+        function loadUserMessages(userId) {
+            if (!openTabs[userId]) return;
+            
+            database.ref('messages')
+                .orderByChild('timestamp')
+                .once('value')
+                .then(snapshot => {
+                    const messages = [];
+                    snapshot.forEach(child => {
+                        const message = child.val();
+                        if ((message.senderId === adminUser.uid && message.receiverId === userId) || 
+                            (message.senderId === userId && message.receiverId === adminUser.uid)) {
+                            messages.push({
+                                id: child.key,
+                                ...message
+                            });
+                        }
+                    });
+                    
+                    // حفظ الرسائل وترتيبها حسب الوقت
+                    openTabs[userId].messages = messages.sort((a, b) => a.timestamp - b.timestamp);
+                    
+                    // إذا كان التبويب نشطاً، عرض الرسائل
+                    if (activeTab === userId) {
+                        displayMessages(userId);
+                    }
+                });
+        }
+
+        // إضافة رسالة إلى تبويب محدد
+        function addMessageToTab(userId, message, messageId) {
+            if (!openTabs[userId]) return;
+            
+            // تجنب تكرار الرسائل
+            if (!openTabs[userId].messages.some(m => m.id === messageId)) {
+                openTabs[userId].messages.push({
+                    id: messageId,
+                    ...message
+                });
+                
+                // إذا كان التبويب نشطاً، عرض الرسائل
+                if (activeTab === userId) {
+                    displayMessages(userId);
+                }
+            }
+        }
+
+        // التبديل إلى تبويب محدد
         function switchToTab(userId) {
             // إلغاء تنشيط جميع التبويبات
             document.querySelectorAll('.chat-tab').forEach(tab => {
@@ -153,11 +222,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // إغلاق تبويب
         function closeTab(userId) {
             if (openTabs[userId]) {
                 // إزالة التبويب
                 openTabs[userId].element.remove();
                 delete openTabs[userId];
+                delete userUnreadCounts[userId];
                 
                 // إذا كان التبويب المغلق هو النشط
                 if (activeTab === userId) {
@@ -176,51 +247,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        function loadMessages(userId) {
-            if (!openTabs[userId]) return;
-            
-            // مسح الرسائل القديمة
-            openTabs[userId].messages = [];
-            
-            // استماع للرسائل الجديدة
-            database.ref('messages')
-                .orderByChild('timestamp')
-                .on('child_added', snapshot => {
-                    const message = snapshot.val();
-                    const messageId = snapshot.key;
-                    
-                    if ((message.senderId === adminUser.uid && message.receiverId === userId) || 
-                        (message.senderId === userId && message.receiverId === adminUser.uid)) {
-                        
-                        // تجنب تكرار الرسائل
-                        if (!openTabs[userId].messages.some(m => m.id === messageId)) {
-                            openTabs[userId].messages.push({
-                                id: messageId,
-                                ...message
-                            });
-                            
-                            // إذا كان التبويب نشطاً، عرض الرسائل
-                            if (activeTab === userId) {
-                                displayMessages(userId);
-                            } else {
-                                // زيادة العداد غير المقروء
-                                incrementUnreadCount(userId);
-                            }
-                            
-                            // تحديث حالة القراءة إذا كانت الرسالة موجهة للإدارة
-                            if (message.receiverId === adminUser.uid && !message.isRead) {
-                                database.ref('messages/' + messageId).update({ isRead: true });
-                            }
-                        }
-                    }
-                });
-        }
-
+        // عرض الرسائل في التبويب النشط
         function displayMessages(userId) {
             if (!openTabs[userId] || activeTab !== userId) return;
             
             messagesContainer.innerHTML = '';
-            const messages = openTabs[userId].messages.sort((a, b) => a.timestamp - b.timestamp);
+            const messages = openTabs[userId].messages;
             
             messages.forEach(message => {
                 const messageDiv = document.createElement('div');
@@ -239,24 +271,86 @@ document.addEventListener('DOMContentLoaded', () => {
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
 
+        // زيادة عداد الرسائل غير المقروءة
         function incrementUnreadCount(userId) {
             if (openTabs[userId]) {
-                const currentCount = parseInt(openTabs[userId].element.querySelector('.tab-unread').textContent || 0);
-                openTabs[userId].element.querySelector('.tab-unread').textContent = currentCount + 1;
-                openTabs[userId].element.querySelector('.tab-unread').style.display = 'inline-block';
+                userUnreadCounts[userId] = (userUnreadCounts[userId] || 0) + 1;
+                const unreadElement = openTabs[userId].element.querySelector('.tab-unread');
+                unreadElement.textContent = userUnreadCounts[userId];
+                unreadElement.style.display = 'inline-block';
+                
+                // تأثير تنبيه للتبويب الجديد
+                openTabs[userId].element.classList.add('new-message');
+                setTimeout(() => {
+                    openTabs[userId].element.classList.remove('new-message');
+                }, 1000);
             }
         }
 
+        // إعادة تعيين عداد الرسائل غير المقروءة
         function resetUnreadCount(userId) {
             if (openTabs[userId]) {
-                openTabs[userId].element.querySelector('.tab-unread').textContent = '0';
-                openTabs[userId].element.querySelector('.tab-unread').style.display = 'none';
+                userUnreadCounts[userId] = 0;
+                const unreadElement = openTabs[userId].element.querySelector('.tab-unread');
+                unreadElement.textContent = '0';
+                unreadElement.style.display = 'none';
             }
         }
 
-        // إرسال الرسائل
-        sendBtn.addEventListener('click', () => {
-            if (!activeTab) return alert('الرجاء اختيار مستخدم أولاً');
+        // ترتيب التبويبات حسب آخر رسالة
+        function sortTabsByLastMessage() {
+            const sortedUserIds = Object.keys(userLastMessageTime).sort((a, b) => {
+                return userLastMessageTime[b] - userLastMessageTime[a];
+            });
+            
+            // إعادة ترتيب التبويبات حسب الترتيب الجديد
+            sortedUserIds.forEach(userId => {
+                if (openTabs[userId]) {
+                    chatTabs.appendChild(openTabs[userId].element);
+                }
+            });
+        }
+
+        // تحديث قائمة المستخدمين
+        function updateUsersList() {
+            database.ref('users').once('value').then(snapshot => {
+                usersList.innerHTML = '';
+                snapshot.forEach(child => {
+                    const userData = child.val();
+                    if (userData.role === 'user') {
+                        const userElement = document.createElement('div');
+                        userElement.className = 'user-item';
+                        userElement.dataset.userId = child.key;
+                        
+                        userElement.innerHTML = `
+                            <div class="user-name">${userData.name}</div>
+                            <div class="user-email">${userData.email}</div>
+                            <div class="user-status" id="status-${child.key}">غير نشط</div>
+                        `;
+                        
+                        // تحديث حالة المستخدم بناءً على وجود محادثة
+                        if (openTabs[child.key]) {
+                            userElement.querySelector('.user-status').textContent = 'نشط الآن';
+                            userElement.querySelector('.user-status').classList.add('online');
+                        }
+                        
+                        userElement.addEventListener('click', () => {
+                            if (!openTabs[child.key]) {
+                                createChatTab(child.key, userData.name);
+                                loadUserMessages(child.key);
+                            }
+                            switchToTab(child.key);
+                        });
+                        
+                        usersList.appendChild(userElement);
+                    }
+                });
+            });
+        }
+
+        // إرسال رسالة
+        function sendMessage() {
+            if (!activeTab) return;
             
             const message = messageInput.value.trim();
             if (!message) return;
@@ -274,27 +368,52 @@ document.addEventListener('DOMContentLoaded', () => {
             database.ref('messages').push().set(newMessage)
                 .then(() => {
                     messageInput.value = '';
-                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    
+                    // تحديث وقت آخر رسالة لهذا المستخدم
+                    userLastMessageTime[activeTab] = Date.now();
+                    
+                    // إعادة ترتيب التبويبات
+                    sortTabsByLastMessage();
                 });
-        });
-
-        // بحث في المستخدمين
-        searchUsers.addEventListener('input', () => {
-            const searchTerm = searchUsers.value.toLowerCase();
-            document.querySelectorAll('.user-item').forEach(item => {
-                const name = item.querySelector('.user-name').textContent.toLowerCase();
-                const email = item.querySelector('.user-email').textContent.toLowerCase();
-                if (name.includes(searchTerm) || email.includes(searchTerm)) {
-                    item.style.display = 'block';
-                } else {
-                    item.style.display = 'none';
-                }
-            });
-        });
+        }
 
         function formatTime(timestamp) {
             const date = new Date(timestamp);
             return `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
+        }
+
+        // تحميل المحادثات الحالية عند البدء
+        loadExistingConversations();
+        
+        function loadExistingConversations() {
+            // جلب جميع الرسائل لمعرفة المستخدمين النشطين
+            database.ref('messages').orderByChild('timestamp').once('value')
+                .then(snapshot => {
+                    const usersWithMessages = new Set();
+                    
+                    snapshot.forEach(child => {
+                        const message = child.val();
+                        if (message.receiverId === adminUser.uid || message.senderId === adminUser.uid) {
+                            const otherUserId = message.senderId === adminUser.uid ? 
+                                message.receiverId : message.senderId;
+                            usersWithMessages.add(otherUserId);
+                        }
+                    });
+                    
+                    // إنشاء تبويبات للمستخدمين النشطين
+                    usersWithMessages.forEach(userId => {
+                        database.ref('users/' + userId).once('value').then(userSnapshot => {
+                            const userData = userSnapshot.val();
+                            if (userData) {
+                                createChatTab(userId, userData.name);
+                                loadUserMessages(userId);
+                            }
+                        });
+                    });
+                    
+                    // تحديث قائمة المستخدمين
+                    updateUsersList();
+                });
         }
     }
 });
